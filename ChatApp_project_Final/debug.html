@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>WebRTC Debug</title>
+</head>
+
+<body>
+    <h1>WebRTC Connection Debug</h1>
+    <div id="debug-info"></div>
+
+    <script>
+        // Simple debug script to test WebRTC
+        async function testWebRTC() {
+            const debugDiv = document.getElementById('debug-info');
+
+            try {
+                // Test 1: Get user media
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                debugDiv.innerHTML += '<p>✅ getUserMedia successful</p>';
+                debugDiv.innerHTML += `<p>Tracks: ${stream.getTracks().length}</p>`;
+
+                // Test 2: Create peer connection
+                const pc = new RTCPeerConnection({
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                });
+                debugDiv.innerHTML += '<p>✅ RTCPeerConnection created</p>';
+
+                // Test 3: Add tracks
+                stream.getTracks().forEach(track => {
+                    pc.addTrack(track, stream);
+                });
+                debugDiv.innerHTML += '<p>✅ Tracks added to peer connection</p>';
+
+                // Test 4: Create offer
+                const offer = await pc.createOffer();
+                debugDiv.innerHTML += '<p>✅ Offer created</p>';
+
+                debugDiv.innerHTML += '<p>🎉 All basic WebRTC tests passed!</p>';
+
+            } catch (error) {
+                debugDiv.innerHTML += `<p>❌ Error: ${error.message}</p>`;
+                console.error('WebRTC test failed:', error);
+            }
+        }
+
+        testWebRTC();
+    </script>
+</body>
+
+</html>

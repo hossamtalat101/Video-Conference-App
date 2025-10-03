@@ -1,0 +1,160 @@
+<!-- landing.html (Updated for Username) -->
+<!DOCTYPE html>
+<html lang="ar">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Video Chat - Welcome</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #222831;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            color: #EEEEEE;
+        }
+
+        .welcome-container {
+            background: #393E46;
+            padding: 3rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        h1 {
+            color: #007BFF;
+            margin-bottom: 2rem;
+        }
+
+        .input-group {
+            margin-bottom: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #5A677D;
+            border-radius: 5px;
+            font-size: 1rem;
+            box-sizing: border-box;
+            background-color: #2A3851;
+            color: #EEEEEE;
+        }
+
+        input[type="text"]::placeholder {
+            color: #A9B8CE;
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        button {
+            background-color: #007BFF;
+            color: #EEEEEE;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056B3;
+        }
+
+        #create-room-btn {
+            background-color: #28A745;
+        }
+
+        #create-room-btn:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="welcome-container">
+        <h1>مرحباً بك في دردشة الفيديو</h1>
+        <div class="input-group">
+            <!-- New Username Field -->
+            <input type="text" id="username-input" placeholder="أدخل اسمك" required>
+            <input type="text" id="room-id-input" placeholder="أدخل معرف الغرفة للانضمام">
+        </div>
+        <div class="button-group">
+            <button id="join-room-btn">الانضمام للغرفة</button>
+            <button id="create-room-btn">إنشاء غرفة جديدة</button>
+        </div>
+    </div>
+
+    <script>
+        // landing.js logic (Updated for Username)
+        const usernameInput = document.getElementById('username-input');
+        const roomIdInput = document.getElementById('room-id-input');
+        const joinRoomBtn = document.getElementById('join-room-btn');
+        const createRoomBtn = document.getElementById('create-room-btn');
+
+        // New: Pre-fill username if it was stored
+        const lastUsername = localStorage.getItem('lastUsername');
+        if (lastUsername) {
+            usernameInput.value = lastUsername;
+        }
+
+        function navigateToRoom(roomId) {
+            const username = usernameInput.value.trim();
+            if (!username) {
+                alert('الرجاء إدخال اسمك.');
+                return;
+            }
+            // Pass username as a URL parameter
+            window.location.href = `/room.html?room=${roomId}&username=${encodeURIComponent(username)}`;
+        }
+
+        joinRoomBtn.addEventListener('click', () => {
+            const roomId = roomIdInput.value.trim();
+            if (roomId) {
+                navigateToRoom(roomId);
+            } else {
+                alert('الرجاء إدخال معرف الغرفة.');
+            }
+        });
+
+        createRoomBtn.addEventListener('click', () => {
+            const newRoomId = Math.random().toString(36).substring(2, 8);
+            navigateToRoom(newRoomId);
+        });
+
+        // Check if room ID is present in URL and pre-fill it
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomFromUrl = urlParams.get('room');
+        if (roomFromUrl) {
+            roomIdInput.value = roomFromUrl;
+        }
+
+        // New: Handle Enter key in username field
+        usernameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                if (roomIdInput.value.trim()) {
+                    joinRoomBtn.click();
+                } else {
+                    createRoomBtn.click();
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

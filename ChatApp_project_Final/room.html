@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ar">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Video Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div id="status-message" class="status-message"></div> <!-- New: For displaying status messages -->
+
+    <!-- New: Disconnection message -->
+    <div id="disconnect-message" class="status-message" style="display: none; background-color: #DC3545;">
+        تم قطع الاتصال. جارٍ إعادة الاتصال...
+    </div>
+
+    <div class="main-layout-wrapper">
+
+        <!-- Left Sidebar: Participants -->
+        <div class="host-dashboard" id="host-dashboard">
+            <h3>Participants (<span id="participant-count">0</span>)</h3>
+            <div class="participant-list" id="participant-list">
+                <!-- Participant items will be injected here by client.js -->
+            </div>
+            <div class="pending-users-section">
+                <h4>Users Waiting for Approval</h4>
+                <div class="pending-users-list" id="pending-users-list">
+                    <!-- Pending user items will be injected here by client.js -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Content Area: Main Video + Controls -->
+        <div class="center-content-area">
+            <div class="video-display-area">
+                <!-- Large circular local video here -->
+                <div class="video-box local-large" id="local-video-container">
+                    <h2>You</h2>
+                    <video id="localVideo" autoplay muted playsinline></video>
+                </div>
+                <!-- Remote videos would eventually go here if they were smaller -->
+                <div class="video-grid" id="video-grid">
+                </div>
+            </div>
+            <div class="controls-bar">
+                <!-- Bottom Control Bar -->
+                <button id="toggleCamera">📸</button>
+                <button id="toggleAudio">🎤</button>
+                <button id="toggleScreenShare">🖥️</button>
+                <button id="endCall">➡️</button>
+            </div>
+        </div>
+
+        <!-- Right Sidebar: Chat -->
+        <div class="chat-panel" id="chat-container">
+            <h3>Chat</h3>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input">
+                <input type="text" id="chat-input-field" placeholder="Send a message...">
+                <button id="send-message-button">➡️</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="invite-container" id="invite-container">
+        <p id="invite-toggle-btn" title="Share Invite Link">🔗</p>
+        <div class="invite-content">
+            <p>Share this link to invite others:</p>
+            <div class="invite-link-wrapper">
+                <input type="text" id="invite-link-input" value="" readonly>
+                <button id="copy-invite-btn" title="Copy Link">📋</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Toggle Buttons for Panels -->
+    <button id="toggle-participants-btn" class="mobile-panel-toggle-btn" title="Toggle Participants">👥</button>
+    <button id="toggle-chat-btn" class="mobile-panel-toggle-btn" title="Toggle Chat">💬</button>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
+</body>
+
+</html>
