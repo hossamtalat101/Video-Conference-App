@@ -60,27 +60,27 @@ if (!roomName) {
     window.location.href = `/landing.html?room=${roomName}`;
 }
 
-const stunServers = {
+// ICE servers will be fetched dynamically from the server
+let iceServerConfig = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        {
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        },
-        {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        },
-        {
-            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        }
+        { urls: 'stun:stun1.l.google.com:19302' }
     ]
 };
+
+// Fetch TURN credentials from server
+async function fetchTurnCredentials() {
+    try {
+        const response = await fetch('/api/turn-credentials');
+        const iceServers = await response.json();
+        iceServerConfig = { iceServers };
+        console.log('[ICE] Fetched ICE servers:', iceServers.length, 'servers');
+        const hasTurn = iceServers.some(s => s.urls && s.urls.toString().startsWith('turn'));
+        console.log('[ICE] TURN servers available:', hasTurn);
+    } catch (error) {
+        console.error('[ICE] Failed to fetch TURN credentials, using STUN only:', error);
+    }
+}
 
 // --- Main Logic: Get Media and Join Room ---
 //--- الحصول على وسائط المتصفح والانضمام للغرفة
@@ -99,25 +99,28 @@ if (shouldReconnect) {
     // If roomName exists but username is missing, redirect to landing page with room pre-filled
     window.location.href = `/landing.html?room=${roomName}`;
 } else {
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .then(stream => {
-            console.log('Local media stream obtained:', stream);
-            localStream = stream;
-            localCameraStream = stream; // To store the camera stream when sharing screen
-            localVideo.srcObject = stream;
+    // First fetch TURN credentials, THEN get media and join room
+    fetchTurnCredentials().then(() => {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                console.log('Local media stream obtained:', stream);
+                localStream = stream;
+                localCameraStream = stream;
+                localVideo.srcObject = stream;
 
-            // Ensure local video plays
-            localVideo.play().catch(e => console.log('Local video play failed:', e));
+                // Ensure local video plays
+                localVideo.play().catch(e => console.log('Local video play failed:', e));
 
-            // Send an object containing both roomName and username
-            socket.emit('join-room', { roomName, username: myUsername });
-            setupAudioAnalysis(stream);
-            setupInviteLink();
-        })
-        .catch(error => {
-            console.error('Error accessing media devices.', error);
-            alert('تعذر الوصول إلى الكاميرا والميكروفون. يرجى التحقق من الأذونات والمحاولة مرة أخرى.');
-        });
+                // Send an object containing both roomName and username
+                socket.emit('join-room', { roomName, username: myUsername });
+                setupAudioAnalysis(stream);
+                setupInviteLink();
+            })
+            .catch(error => {
+                console.error('Error accessing media devices.', error);
+                alert('تعذر الوصول إلى الكاميرا والميكروفون. يرجى التحقق من الأذونات والمحاولة مرة أخرى.');
+            });
+    });
 }
 
 // --- Socket.IO Event Listeners ---
@@ -360,7 +363,7 @@ socket.on('user-speaking', (data) => {
 // --- WebRTC Core Logic ---
 function createPeerConnection(targetUserId, isInitiator) {
     console.log(`[client.js] createPeerConnection: target=${targetUserId}, initiator=${isInitiator}`);
-    const pc = new RTCPeerConnection(stunServers);
+    const pc = new RTCPeerConnection(iceServerConfig);
     // Add local stream tracks to peer connection
     if (localStream && localStream.getTracks().length > 0) {
         localStream.getTracks().forEach(track => {
@@ -370,14 +373,9 @@ function createPeerConnection(targetUserId, isInitiator) {
         console.log(`Added ${localStream.getTracks().length} tracks to peer connection for ${targetUserId}`);
     } else {
         console.error(`No local stream or tracks available for ${targetUserId}`);
-        console.log('Local stream:', localStream);
-        if (localStream) {
-            console.log('Local stream tracks:', localStream.getTracks());
-        }
     }
     pc.onicecandidate = event => {
         if (event.candidate) {
-            console.log(`Sending ICE candidate to ${targetUserId}`);
             socket.emit('ice-candidate', { target: targetUserId, candidate: event.candidate });
         }
     };
@@ -396,31 +394,58 @@ function createPeerConnection(targetUserId, isInitiator) {
         } else {
             const video = videoContainer.querySelector('video');
             if (video) {
-                // Only update if stream changed
                 if (video.srcObject !== stream) {
                     video.srcObject = stream;
                 }
-                // Ensure video plays after setting srcObject
                 video.play().catch(e => console.log('Video play failed:', e));
             }
         }
     };
 
     pc.oniceconnectionstatechange = () => {
-        console.log(`ICE connection state for ${targetUserId}: ${pc.iceConnectionState}`);
-        if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed') {
+        const state = pc.iceConnectionState;
+        console.log(`[ICE] Connection state for ${targetUserId}: ${state}`);
+
+        if (state === 'failed') {
+            // Attempt ICE restart
+            console.log(`[ICE] Connection FAILED for ${targetUserId} — attempting ICE restart...`);
+            if (peerConnections[targetUserId]) {
+                pc.createOffer({ iceRestart: true })
+                    .then(offer => pc.setLocalDescription(offer))
+                    .then(() => {
+                        socket.emit('offer', { target: targetUserId, signal: pc.localDescription, callerId: socket.id });
+                        console.log(`[ICE] ICE restart offer sent to ${targetUserId}`);
+                    })
+                    .catch(e => console.error('[ICE] ICE restart failed:', e));
+            }
+        } else if (state === 'disconnected') {
+            // Wait a moment before cleaning up — might reconnect
+            console.log(`[ICE] Disconnected from ${targetUserId} — waiting for reconnection...`);
+            setTimeout(() => {
+                if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+                    console.log(`[ICE] Still disconnected from ${targetUserId} — attempting ICE restart`);
+                    pc.createOffer({ iceRestart: true })
+                        .then(offer => pc.setLocalDescription(offer))
+                        .then(() => {
+                            socket.emit('offer', { target: targetUserId, signal: pc.localDescription, callerId: socket.id });
+                        })
+                        .catch(e => console.error('[ICE] ICE restart failed:', e));
+                }
+            }, 3000);
+        } else if (state === 'closed') {
             const videoContainer = document.getElementById(`container-${targetUserId}`);
             if (videoContainer) videoContainer.remove();
             if (peerConnections[targetUserId]) {
-                peerConnections[targetUserId].pc.close();
                 delete peerConnections[targetUserId];
             }
             updateParticipantList();
+        } else if (state === 'connected') {
+            console.log(`[ICE] ✅ Successfully connected to ${targetUserId}`);
         }
     };
 
     pc.onconnectionstatechange = () => {
-        console.log(`Connection state for ${targetUserId}: ${pc.connectionState}`);
+        console.log(`[WebRTC] Connection state for ${targetUserId}: ${pc.connectionState}`);
     };
 
     if (isInitiator) {

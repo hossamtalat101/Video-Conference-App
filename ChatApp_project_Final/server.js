@@ -15,6 +15,42 @@ const io = socketIo(server, {
     transports: ['websocket', 'polling']
 });
 
+// --- TURN Server Credentials API ---
+// Uses Metered.ca free tier (500MB/month free, no credit card required)
+// Set METERED_API_KEY environment variable on Render
+app.get('/api/turn-credentials', async (req, res) => {
+    const apiKey = process.env.METERED_API_KEY;
+    if (!apiKey) {
+        console.warn('[TURN] METERED_API_KEY not set - returning STUN-only config');
+        return res.json([
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' }
+        ]);
+    }
+    try {
+        const response = await fetch(
+            `https://${process.env.METERED_DOMAIN || 'global.relay.metered.ca'}/api/v1/turn/credentials?apiKey=${apiKey}`
+        );
+        const iceServers = await response.json();
+        console.log('[TURN] Fetched TURN credentials successfully');
+        // Add Google STUN servers as fallback
+        iceServers.unshift(
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        );
+        res.json(iceServers);
+    } catch (error) {
+        console.error('[TURN] Error fetching TURN credentials:', error);
+        res.json([
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]);
+    }
+});
+
 // Serve static files (HTML, CSS, client.js)
 app.use(express.static(__dirname));
 // Serve the landing page as the main entry point
