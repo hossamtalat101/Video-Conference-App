@@ -9,7 +9,7 @@ const path = require('path');
 
 // Generate self-signed certificate for HTTPS
 const attrs = [{ name: 'commonName', value: 'localhost' }];
-const pems = selfsigned.generate(attrs, { days: 365 });
+// const pems = selfsigned.generate(attrs, { days: 365 });
 
 const app = express();
 // const server = https.createServer({ key: pems.private, cert: pems.cert }, app);
