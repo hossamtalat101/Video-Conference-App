@@ -215,7 +215,8 @@ socket.on('user-joined', (user) => {
     console.log('=== USER JOINED EVENT ===');
     console.log('User joined:', user);
     console.log(`[client.js] user-joined: Creating PC for ${user.username} (${user.id})`);
-    const pc = createPeerConnection(user.id, true); // Existing users initiate connection to new user
+    // Existing users must NOT be initiators — the new user will send offers via 'other-users'
+    const pc = createPeerConnection(user.id, false);
     peerConnections[user.id] = { pc, muted: user.muted, username: user.username, socketId: user.id, isLocal: false };
     console.log('Added peer connection for new user:', user.id, peerConnections[user.id]);
     updateAdminControls();
