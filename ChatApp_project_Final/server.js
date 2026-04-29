@@ -1,9 +1,10 @@
 // server.js (Final Complete Version)
 
 const express = require('express');
-const https = require('https');
+// const https = require('https');
+const http = require('http');
 const socketIo = require('socket.io');
-const selfsigned = require('selfsigned');
+// const selfsigned = require('selfsigned');
 const path = require('path');
 
 // Generate self-signed certificate for HTTPS
@@ -11,7 +12,8 @@ const attrs = [{ name: 'commonName', value: 'localhost' }];
 const pems = selfsigned.generate(attrs, { days: 365 });
 
 const app = express();
-const server = https.createServer({ key: pems.private, cert: pems.cert }, app);
+// const server = https.createServer({ key: pems.private, cert: pems.cert }, app);
+const server = http.createServer(app);
 const io = socketIo(server);
 
 // Serve static files (HTML, CSS, client.js)
