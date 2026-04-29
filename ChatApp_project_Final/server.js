@@ -1,20 +1,19 @@
-// server.js (Final Complete Version)
+// server.js (Final Complete Version - Render Compatible)
 
 const express = require('express');
-// const https = require('https');
 const http = require('http');
 const socketIo = require('socket.io');
-// const selfsigned = require('selfsigned');
 const path = require('path');
 
-// Generate self-signed certificate for HTTPS
-const attrs = [{ name: 'commonName', value: 'localhost' }];
-// const pems = selfsigned.generate(attrs, { days: 365 });
-
 const app = express();
-// const server = https.createServer({ key: pems.private, cert: pems.cert }, app);
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIo(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    },
+    transports: ['websocket', 'polling']
+});
 
 // Serve static files (HTML, CSS, client.js)
 app.use(express.static(__dirname));
@@ -53,7 +52,7 @@ io.on('connection', (socket) => {
         let isReturningUser = false;
         let previousUserId = null;
         let wasHost = false;
-        
+
         // Check if user with same username is already in the room
         for (const [userId, userInfo] of Object.entries(roomInfo.users)) {
             if (userInfo.username === username && userId !== socket.id) {
@@ -68,17 +67,17 @@ io.on('connection', (socket) => {
         if (isReturningUser && previousUserId) {
             // Remove the old connection
             delete roomInfo.users[previousUserId];
-            
+
             // Preserve host role if they were the host
             const userRole = wasHost ? 'host' : 'participant';
-            
+
             // Add the new connection
-            roomInfo.users[socket.id] = { 
-                role: userRole, 
-                muted: false, 
-                username: username 
+            roomInfo.users[socket.id] = {
+                role: userRole,
+                muted: false,
+                username: username
             };
-            
+
             // Update host if they were the host
             if (wasHost) {
                 roomInfo.host = socket.id;
@@ -86,20 +85,20 @@ io.on('connection', (socket) => {
                 // Notify all users that the host has reconnected
                 socket.to(roomName).emit('host-reconnected', { username: username });
             }
-            
+
             socket.join(roomName);
             socket.emit('your-role', { role: userRole });
-            
+
             // Send the list of other active users
             const usersInRoom = roomInfo.users;
             const otherUsers = Object.keys(usersInRoom)
                 .filter(id => id !== socket.id)
                 .map(id => ({ id, muted: usersInRoom[id].muted, username: usersInRoom[id].username }));
             socket.emit('other-users', otherUsers);
-            
+
             // Notify existing active users about the reconnected user
             socket.to(roomName).emit('user-joined', { id: socket.id, muted: false, username: username });
-            
+
             console.log(`User ${username} reconnected to room ${roomName} with new socket ID ${socket.id} as ${userRole}`);
             return;
         }
@@ -146,7 +145,12 @@ io.on('connection', (socket) => {
                 targetSocket.emit('other-users', otherUsers);
 
                 // Notify existing active users about the new approved user
-                socket.to(roomName).emit('user-joined', { id: userId, muted: false, username: approvedUser.username });
+                // Use individual emit to avoid sending to the newly approved user themselves
+                Object.keys(roomInfo.users).forEach(existingUserId => {
+                    if (existingUserId !== userId) {
+                        io.to(existingUserId).emit('user-joined', { id: userId, muted: false, username: approvedUser.username });
+                    }
+                });
             }
         }
     });

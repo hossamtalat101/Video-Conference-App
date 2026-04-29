@@ -1,6 +1,11 @@
 // client.js (Final Complete Version with Usernames)
 
-const socket = io();
+const socket = io({
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000
+});
 
 // --- DOM Element References ---
 const localVideo = document.getElementById('localVideo');
@@ -58,7 +63,22 @@ if (!roomName) {
 const stunServers = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
+        { urls: 'stun:stun1.l.google.com:19302' },
+        {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        }
     ]
 };
 
@@ -85,10 +105,10 @@ if (shouldReconnect) {
             localStream = stream;
             localCameraStream = stream; // To store the camera stream when sharing screen
             localVideo.srcObject = stream;
-            
+
             // Ensure local video plays
             localVideo.play().catch(e => console.log('Local video play failed:', e));
-            
+
             // Send an object containing both roomName and username
             socket.emit('join-room', { roomName, username: myUsername });
             setupAudioAnalysis(stream);
@@ -107,11 +127,11 @@ socket.on('connect', () => {
     console.log('My socket ID:', mySocketId);
     peerConnections[mySocketId] = { pc: null, muted: false, username: myUsername, socketId: mySocketId, isLocal: true };
     updateParticipantList();
-    
+
     // New: Hide disconnect message when reconnected
     disconnectMessageDiv.style.display = 'none';
     statusMessageDiv.style.display = 'block';
-    
+
     // New: Update localStorage with current socket ID
     localStorage.setItem('currentSocketId', socket.id);
 });
@@ -145,7 +165,7 @@ socket.on('your-role', (data) => {
     updateAdminControls();
     updateParticipantList();
     updatePendingUsersList();
-    
+
     // Log role assignment for debugging
     console.log(`Assigned role: ${myRole} to user ${myUsername}`);
 });
@@ -253,27 +273,27 @@ socket.on('disconnect', () => {
     // New: Show disconnect message
     statusMessageDiv.style.display = 'none';
     disconnectMessageDiv.style.display = 'block';
-    
+
     // Removed unused localStorage item
 });
 
 socket.on('offer', (payload) => {
     console.log('=== RECEIVED OFFER ===');
     console.log(`Received offer from ${payload.callerId}`);
-    
+
     let pc = peerConnections[payload.callerId]?.pc;
     if (!pc) {
         console.log(`No existing PC for ${payload.callerId}, creating new one`);
         pc = createPeerConnection(payload.callerId, false);
-        peerConnections[payload.callerId] = { 
-            pc, 
-            muted: false, 
-            username: peerConnections[payload.callerId]?.username || 'مستخدم غير معروف', 
-            socketId: payload.callerId, 
-            isLocal: false 
+        peerConnections[payload.callerId] = {
+            pc,
+            muted: false,
+            username: peerConnections[payload.callerId]?.username || 'مستخدم غير معروف',
+            socketId: payload.callerId,
+            isLocal: false
         };
     }
-    
+
     console.log('Setting remote description...');
     pc.setRemoteDescription(new RTCSessionDescription(payload.signal))
         .then(() => {
@@ -293,7 +313,7 @@ socket.on('offer', (payload) => {
             console.error('Error handling offer:', e);
             console.error('Stack trace:', e.stack);
         });
-    
+
     console.log('=== END RECEIVED OFFER ===');
 });
 
@@ -360,23 +380,31 @@ function createPeerConnection(targetUserId, isInitiator) {
             socket.emit('ice-candidate', { target: targetUserId, candidate: event.candidate });
         }
     };
-    
+
     pc.ontrack = event => {
-        console.log(`[client.js] ontrack event for ${targetUserId}:`, event.streams);
+        console.log(`[client.js] ontrack: kind=${event.track.kind}, streams=${event.streams.length}, target=${targetUserId}`);
+        if (!event.streams || event.streams.length === 0) {
+            console.warn(`ontrack received without streams for ${targetUserId}`);
+            return;
+        }
+        const stream = event.streams[0];
         let videoContainer = document.getElementById(`container-${targetUserId}`);
         if (!videoContainer) {
             console.log(`[client.js] createVideoElement: Creating new video for ${targetUserId}`);
-            createVideoElement(targetUserId, event.streams[0]);
+            createVideoElement(targetUserId, stream);
         } else {
             const video = videoContainer.querySelector('video');
             if (video) {
-                video.srcObject = event.streams[0];
+                // Only update if stream changed
+                if (video.srcObject !== stream) {
+                    video.srcObject = stream;
+                }
                 // Ensure video plays after setting srcObject
                 video.play().catch(e => console.log('Video play failed:', e));
             }
         }
     };
-    
+
     pc.oniceconnectionstatechange = () => {
         console.log(`ICE connection state for ${targetUserId}: ${pc.iceConnectionState}`);
         if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed') {
@@ -389,11 +417,11 @@ function createPeerConnection(targetUserId, isInitiator) {
             updateParticipantList();
         }
     };
-    
+
     pc.onconnectionstatechange = () => {
         console.log(`Connection state for ${targetUserId}: ${pc.connectionState}`);
     };
-    
+
     if (isInitiator) {
         // Add a small delay to ensure the peer connection is properly set up
         setTimeout(() => {
@@ -418,9 +446,9 @@ function createVideoElement(userId, stream) {
         console.warn(`[client.js] createVideoElement: Attempted to create remote video for local user (${userId}). Ignoring.`);
         return;
     }
-    
+
     console.log(`[client.js] Creating video element for ${userId}`, stream);
-    
+
     const videoContainer = document.createElement('div');
     videoContainer.className = 'video-box remote-video-box';
     videoContainer.id = `container-${userId}`;
@@ -433,12 +461,12 @@ function createVideoElement(userId, stream) {
     video.addEventListener('loadedmetadata', () => {
         console.log(`Video metadata loaded for ${userId}`);
     });
-    
+
     video.addEventListener('canplay', () => {
         console.log(`Video can play for ${userId}`);
         video.play().catch(e => console.log('Video play error:', e));
     });
-    
+
     video.addEventListener('error', (e) => {
         console.error(`Video error for ${userId}:`, e);
     });
@@ -453,7 +481,7 @@ function createVideoElement(userId, stream) {
     videoContainer.append(nameTag, video, adminControls);
     videoGrid.appendChild(videoContainer);
     updateAdminControlsForUser(userId);
-    
+
     // Force video to play after a short delay
     setTimeout(() => {
         if (video.srcObject && video.paused) {
@@ -500,7 +528,7 @@ function updateParticipantList() {
         info.textContent = p.username + (p.socketId === mySocketId ? ' (أنت)' : '');
         const controls = document.createElement('div');
         controls.className = 'participant-controls';
-        
+
         // Mute/Unmute button
         if (myRole === 'host' && p.socketId !== mySocketId) {
             const muteBtn = document.createElement('button');
