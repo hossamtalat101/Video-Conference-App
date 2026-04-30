@@ -43,7 +43,12 @@ app.get('/api/turn-credentials', (req, res) => {
         apiRes.on('data', chunk => { data += chunk; });
         apiRes.on('end', () => {
             try {
-                const iceServers = JSON.parse(data);
+                let parsedData = JSON.parse(data);
+                console.log('[TURN] Raw API response:', data);
+
+                // Metered might return an object or an array depending on success/failure
+                let iceServers = Array.isArray(parsedData) ? parsedData : [];
+
                 console.log('[TURN] Fetched TURN credentials successfully, count:', iceServers.length);
                 // Add Google STUN servers as fallback
                 iceServers.unshift(
