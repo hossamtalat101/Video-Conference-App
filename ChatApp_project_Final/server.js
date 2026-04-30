@@ -21,8 +21,8 @@ const io = socketIo(server, {
 const https = require('https');
 
 app.get('/api/turn-credentials', (req, res) => {
-    const apiKey = process.env.METERED_API_KEY;
-    const domain = process.env.METERED_DOMAIN || 'global.relay.metered.ca';
+    const apiKey = process.env.METERED_API_KEY || 'cb853fefd41060b7696d95cfa18e21b49263';
+    const domain = process.env.METERED_DOMAIN || 'perrsonal-video-conference-app.metered.live';
 
     if (!apiKey) {
         console.warn('[TURN] METERED_API_KEY not set - returning STUN-only config');
