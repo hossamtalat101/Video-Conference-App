@@ -60,11 +60,31 @@ if (!roomName) {
     window.location.href = `/landing.html?room=${roomName}`;
 }
 
-// ICE servers will be fetched dynamically from the server
+// ICE servers will be fetched dynamically from the server, but default to hardcoded valid config
 let iceServerConfig = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
+        { urls: 'stun:stun1.l.google.com:19302' },
+        {
+            urls: "turn:global.relay.metered.ca:80",
+            username: "618a528005d230d9cab2b90c",
+            credential: "4Dm84dUhdCmobb8j",
+        },
+        {
+            urls: "turn:global.relay.metered.ca:80?transport=tcp",
+            username: "618a528005d230d9cab2b90c",
+            credential: "4Dm84dUhdCmobb8j",
+        },
+        {
+            urls: "turn:global.relay.metered.ca:443",
+            username: "618a528005d230d9cab2b90c",
+            credential: "4Dm84dUhdCmobb8j",
+        },
+        {
+            urls: "turns:global.relay.metered.ca:443?transport=tcp",
+            username: "618a528005d230d9cab2b90c",
+            credential: "4Dm84dUhdCmobb8j",
+        }
     ]
 };
 
@@ -73,12 +93,16 @@ async function fetchTurnCredentials() {
     try {
         const response = await fetch('/api/turn-credentials');
         const iceServers = await response.json();
-        iceServerConfig = { iceServers };
-        console.log('[ICE] Fetched ICE servers:', iceServers.length, 'servers');
-        const hasTurn = iceServers.some(s => s.urls && s.urls.toString().startsWith('turn'));
+        // If the server returns at least 3 servers (STUN + at least one TURN), use it.
+        // Otherwise, keep the hardcoded working config to prevent failure.
+        if (iceServers && iceServers.length > 2) {
+            iceServerConfig = { iceServers };
+        }
+        console.log('[ICE] Fetched ICE servers:', iceServerConfig.iceServers.length, 'servers');
+        const hasTurn = iceServerConfig.iceServers.some(s => s.urls && s.urls.toString().startsWith('turn'));
         console.log('[ICE] TURN servers available:', hasTurn);
     } catch (error) {
-        console.error('[ICE] Failed to fetch TURN credentials, using STUN only:', error);
+        console.error('[ICE] Failed to fetch TURN credentials, using fallback:', error);
     }
 }
 
