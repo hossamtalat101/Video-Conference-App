@@ -16,61 +16,35 @@ const io = socketIo(server, {
 });
 
 // --- TURN Server Credentials API ---
-// Uses Metered.ca free tier (500MB/month free, no credit card required)
-// Set METERED_API_KEY environment variable on Render
-const https = require('https');
-
 app.get('/api/turn-credentials', (req, res) => {
-    const apiKey = process.env.METERED_API_KEY || 'cb853fefd41060b7696d95cfa18e21b49263';
-    const domain = process.env.METERED_DOMAIN || 'perrsonal-video-conference-app.metered.live';
-
-    if (!apiKey) {
-        console.warn('[TURN] METERED_API_KEY not set - returning STUN-only config');
-        return res.json([
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' }
-        ]);
-    }
-
-    const url = `https://${domain}/api/v1/turn/credentials?apiKey=${apiKey}`;
-    console.log('[TURN] Fetching credentials from:', url);
-
-    https.get(url, (apiRes) => {
-        let data = '';
-        apiRes.on('data', chunk => { data += chunk; });
-        apiRes.on('end', () => {
-            try {
-                let parsedData = JSON.parse(data);
-                console.log('[TURN] Raw API response:', data);
-
-                // Metered might return an object or an array depending on success/failure
-                let iceServers = Array.isArray(parsedData) ? parsedData : [];
-
-                console.log('[TURN] Fetched TURN credentials successfully, count:', iceServers.length);
-                // Add Google STUN servers as fallback
-                iceServers.unshift(
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                );
-                res.json(iceServers);
-            } catch (parseError) {
-                console.error('[TURN] Error parsing TURN response:', parseError, 'Raw data:', data);
-                res.json([
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]);
-            }
-        });
-    }).on('error', (error) => {
-        console.error('[TURN] Error fetching TURN credentials:', error.message);
-        res.json([
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
-        ]);
-    });
+    // The https.get request to Metered is timing out on Render, likely due to
+    // outbound request restrictions or IP blocking. Since we have valid static
+    // credentials, we return them instantly to prevent the client from hanging.
+    console.log('[TURN] Returning hardcoded instant config to avoid timeouts');
+    res.json([
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        {
+            urls: "turn:global.relay.metered.ca:80",
+            username: "618a528005d230d9cab2b90c",
+            credential: "4Dm84dUhdCmobb8j",
+        },
+        {
+            urls: "turn:global.relay.metered.ca:80?transport=tcp",
+            username: "618a528005d230d9cab2b90c",
+            credential: "4Dm84dUhdCmobb8j",
+        },
+        {
+            urls: "turn:global.relay.metered.ca:443",
+            username: "618a528005d230d9cab2b90c",
+            credential: "4Dm84dUhdCmobb8j",
+        },
+        {
+            urls: "turns:global.relay.metered.ca:443?transport=tcp",
+            username: "618a528005d230d9cab2b90c",
+            credential: "4Dm84dUhdCmobb8j",
+        }
+    ]);
 });
 
 // Debug endpoint to check current ICE config
