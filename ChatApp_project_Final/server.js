@@ -18,8 +18,12 @@ const io = socketIo(server, {
 // --- TURN Server Credentials API ---
 // Uses Metered.ca free tier (500MB/month free, no credit card required)
 // Set METERED_API_KEY environment variable on Render
-app.get('/api/turn-credentials', async (req, res) => {
+const https = require('https');
+
+app.get('/api/turn-credentials', (req, res) => {
     const apiKey = process.env.METERED_API_KEY;
+    const domain = process.env.METERED_DOMAIN || 'global.relay.metered.ca';
+
     if (!apiKey) {
         console.warn('[TURN] METERED_API_KEY not set - returning STUN-only config');
         return res.json([
@@ -30,25 +34,47 @@ app.get('/api/turn-credentials', async (req, res) => {
             { urls: 'stun:stun4.l.google.com:19302' }
         ]);
     }
-    try {
-        const response = await fetch(
-            `https://${process.env.METERED_DOMAIN || 'global.relay.metered.ca'}/api/v1/turn/credentials?apiKey=${apiKey}`
-        );
-        const iceServers = await response.json();
-        console.log('[TURN] Fetched TURN credentials successfully');
-        // Add Google STUN servers as fallback
-        iceServers.unshift(
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
-        );
-        res.json(iceServers);
-    } catch (error) {
-        console.error('[TURN] Error fetching TURN credentials:', error);
+
+    const url = `https://${domain}/api/v1/turn/credentials?apiKey=${apiKey}`;
+    console.log('[TURN] Fetching credentials from:', url);
+
+    https.get(url, (apiRes) => {
+        let data = '';
+        apiRes.on('data', chunk => { data += chunk; });
+        apiRes.on('end', () => {
+            try {
+                const iceServers = JSON.parse(data);
+                console.log('[TURN] Fetched TURN credentials successfully, count:', iceServers.length);
+                // Add Google STUN servers as fallback
+                iceServers.unshift(
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                );
+                res.json(iceServers);
+            } catch (parseError) {
+                console.error('[TURN] Error parsing TURN response:', parseError, 'Raw data:', data);
+                res.json([
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]);
+            }
+        });
+    }).on('error', (error) => {
+        console.error('[TURN] Error fetching TURN credentials:', error.message);
         res.json([
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' }
         ]);
-    }
+    });
+});
+
+// Debug endpoint to check current ICE config
+app.get('/api/debug-ice', (req, res) => {
+    res.json({
+        hasApiKey: !!process.env.METERED_API_KEY,
+        domain: process.env.METERED_DOMAIN || 'global.relay.metered.ca (default)',
+        nodeVersion: process.version
+    });
 });
 
 // Serve static files (HTML, CSS, client.js)
